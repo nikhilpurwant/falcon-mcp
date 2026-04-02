@@ -549,7 +549,7 @@ Example:
 
 #### ADK A2A Gateway Agent
 
-Since standard A2A clients might expect to send `Bearer` tokens (JWT) rather than raw tenant headers, we provide an **A2A Gateway Agent** built using the Machine Customer Protocol (MCP) ADK.
+Since standard A2A clients might expect to send `Bearer` tokens (JWT) rather than raw tenant headers, we provide an **A2A Gateway Agent** built using the Model Context Protocol (MCP) ADK.
 
 -   **Location**: `examples/adk/falcon_a2a_agent`
 -   **Role**: Translates standard `Bearer` tokens to the `sec-res-name` and `oauth-sub` headers required by the backend SaaS server.
