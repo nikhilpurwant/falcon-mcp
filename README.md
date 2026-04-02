@@ -547,6 +547,22 @@ The secret in Secret Manager should contain the credentials in the following for
 Example:
 `110169484474386276334=42614583a5fd40d587e363710b12345=WR1kfBx7OKGm0ZIMVnU6LA4Ypg8euvd95Q1234567=https://api.us-2.crowdstrike.com`
 
+#### ADK A2A Gateway Agent
+
+Since standard A2A clients might expect to send `Bearer` tokens (JWT) rather than raw tenant headers, we provide an **A2A Gateway Agent** built using the Machine Customer Protocol (MCP) ADK.
+
+-   **Location**: `examples/adk/falcon_a2a_agent`
+-   **Role**: Translates standard `Bearer` tokens to the `sec-res-name` and `oauth-sub` headers required by the backend SaaS server.
+
+To run the A2A agent:
+
+```bash
+cd examples/adk/falcon_a2a_agent
+uv run uvicorn agent:a2a_app --port 8001
+```
+
+See `changes_for_saas.md` for a full architectural overview of SaaS mode and Caching optimizations.
+
 ### Installation
 
 > [!NOTE]

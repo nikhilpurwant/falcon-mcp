@@ -89,24 +89,40 @@ class FalconClient:
     def client(self) -> Any:
         """Get the underlying Falcon API client (static or dynamic)."""
         if self.saas_mode:
-            from falcon_mcp.common.saas import falcon_credentials_var
+            from falcon_mcp.common.saas import _client_cache, falcon_credentials_var
 
             creds = falcon_credentials_var.get()
             if not creds:
                 logger.error("SaaS credentials not found in context")
                 raise ValueError("SaaS credentials not found in context")
 
+            sec_res_name = creds["sec_res_name"]
+
+            # Check cache
+            if sec_res_name in _client_cache:
+                logger.info("SaaS Client Cache HIT for: %s", sec_res_name)
+                cached_client = _client_cache[sec_res_name]
+                if not cached_client.token_valid:
+                    logger.info("SaaS Cached token expired, re-logging in for: %s", sec_res_name)
+                    cached_client.login()
+                return cached_client
+
+            logger.info("SaaS Client Cache MISS for: %s. Creating new instance.", sec_res_name)
+
             api_params = {
                 "client_id": creds["client_id"],
                 "client_secret": creds["client_secret"],
                 "base_url": creds["base_url"],
-                "debug": self.debug,
+                "debug": True,  # Force debug true for SaaS troubleshooting
                 "user_agent": self.get_user_agent(),
             }
             if self.member_cid:
                 api_params["member_cid"] = self.member_cid
 
-            return APIHarnessV2(**api_params)
+            new_client = APIHarnessV2(**api_params)
+            new_client.login()  # Pre-login
+            _client_cache[sec_res_name] = new_client
+            return new_client
         else:
             return self._static_client
 
@@ -125,6 +141,11 @@ class FalconClient:
         Returns:
             bool: True if the client is authenticated
         """
+        if self.saas_mode:
+            # In SaaS mode, we must trigger login to verify credentials
+            login_result = self.client.login()
+            logger.info("SaaS login attempt result: %s", login_result)
+            return login_result
         result: bool = self.client.token_valid
         return result
 

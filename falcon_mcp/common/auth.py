@@ -136,10 +136,11 @@ def saas_middleware(app: ASGIApp) -> ASGIApp:
 
                 # Parse and validate
                 credentials = parse_and_validate_secret(secret_val, oauth_sub_header)
+                credentials["sec_res_name"] = sec_res_name
 
                 # Set context variable
                 token = falcon_credentials_var.set(credentials)
-                saas_logger.debug("SaaS context set for: %s", sec_res_name)
+                saas_logger.info("SaaS context set for: %s", sec_res_name)
 
                 try:
                     await app(scope, receive, send)

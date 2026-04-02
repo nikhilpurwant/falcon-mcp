@@ -1,0 +1,4 @@
+google-adk[a2a]
+pyjwt
+httpx
+python-dotenv

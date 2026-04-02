@@ -1,0 +1,25 @@
+{
+  "name": "falcon_a2a_agent",
+  "version": "1.0.0",
+  "description": "CrowdStrike Falcon Cybersecurity Analyst",
+  "capabilities": {},
+  "skills": [
+    {
+      "id": "falcon_a2a_agent-investigate_threat",
+      "name": "model",
+      "description": "Investigate threats using CrowdStrike Falcon Tools",
+      "tags": [
+        "llm",
+        "tools"
+      ]
+    }
+  ],
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "text/plain"
+  ],
+  "supportsAuthenticatedExtendedCard": false,
+  "url": "http://localhost:8001"
+}

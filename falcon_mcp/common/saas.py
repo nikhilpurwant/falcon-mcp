@@ -7,7 +7,7 @@ from Google Cloud Secret Manager in SaaS mode.
 
 import os
 from contextvars import ContextVar
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from google.cloud import secretmanager  # type: ignore[import-untyped]
 
@@ -22,6 +22,7 @@ class FalconCredentials(TypedDict):
     client_secret: str
     base_url: str
     oauth_sub: str
+    sec_res_name: str
 
 
 # Context variable to hold credentials for the current request
@@ -30,27 +31,50 @@ falcon_credentials_var: ContextVar[FalconCredentials | None] = ContextVar(
 )
 
 
-def get_secret_val(secret_name: str) -> str:
-    """Fetch secret value from Google Cloud Secret Manager.
+# Global cache for FalconPy APIHarnessV2 instances (Option 2 Caching)
+# Key: sec_res_name, Value: APIHarnessV2 instance
+_client_cache: dict[str, Any] = {}
+
+
+# Global cache for GCP secrets (Option 2 Optimization)
+# Key: secret_name, Value: (timestamp, secret_value)
+_secret_cache: dict[str, tuple[float, str]] = {}
+DEFAULT_SECRET_TTL = 300  # 5 minutes
+
+
+def get_secret_val(secret_name: str, ttl: int = DEFAULT_SECRET_TTL) -> str:
+    """Fetch secret value from Google Cloud Secret Manager (with internal cache).
 
     Args:
         secret_name: Full resource name of the secret, e.g.,
                     "projects/PROJECT_ID/secrets/SECRET_ID/versions/VERSION"
                     If version is not specified, it defaults to "latest".
+        ttl: Time-to-live for the cache in seconds.
 
     Returns:
         str: The secret payload as a string
     """
+    import time
+
     # If version is not specified in the resource name, add "/versions/latest"
     if "/versions/" not in secret_name:
         secret_name = f"{secret_name}/versions/latest"
 
-    logger.debug("Fetching secret from Secret Manager: %s", secret_name)
+    # Check Cache
+    if secret_name in _secret_cache:
+        cached_time, val = _secret_cache[secret_name]
+        if time.time() - cached_time < ttl:
+            logger.info("SaaS Secret Cache HIT for %s", secret_name)
+            return val
+        logger.info("SaaS Secret Cache EXPIRED for %s", secret_name)
+
+    logger.info("SaaS Secret Cache MISS for %s. Fetching from GCP.", secret_name)
 
     try:
         client = secretmanager.SecretManagerServiceClient()
         response = client.access_secret_version(name=secret_name)
         payload = response.payload.data.decode("UTF-8")
+        _secret_cache[secret_name] = (time.time(), payload)
         return payload
     except Exception as e:
         logger.error("Failed to fetch secret %s: %s", secret_name, e)
