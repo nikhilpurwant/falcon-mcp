@@ -8,6 +8,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from falcon_mcp.common.logging import get_logger
+from falcon_mcp.common.saas import (
+    falcon_credentials_var,
+    get_secret_val,
+    parse_and_validate_secret,
+)
 
 # ASGI type aliases - using MutableMapping for Starlette compatibility
 Scope = MutableMapping[str, Any]
@@ -91,6 +96,66 @@ def auth_middleware(app: ASGIApp, api_key: str) -> ASGIApp:
                 response = JSONResponse({"error": "Unauthorized"}, status_code=401)
                 await response(scope, receive, send)
                 return
+        await app(scope, receive, send)
+
+    return middleware
+
+
+def saas_middleware(app: ASGIApp) -> ASGIApp:
+    """Wrap an ASGI app with SaaS multi-tenant authentication and client setup.
+
+    This middleware extracts SEC_RES_NAME and OAUTH_SUB from headers,
+    fetches the secret from GCP Secret Manager, validates OAUTH_SUB,
+    and sets the context variable for the Falcon client.
+
+    Args:
+        app: The ASGI application to wrap
+
+    Returns:
+        ASGI app that sets up SaaS context before passing to wrapped app
+    """
+    saas_logger = get_logger("falcon_mcp.saas_middleware")
+
+    async def middleware(scope: Scope, receive: ASGIReceive, send: ASGISend) -> None:
+        if scope["type"] == "http":
+            request = Request(scope)
+            sec_res_name = request.headers.get("sec-res-name") or request.headers.get("sec_res_name")
+            oauth_sub_header = request.headers.get("oauth-sub") or request.headers.get("oauth_sub")
+
+            if not sec_res_name or not oauth_sub_header:
+                saas_logger.error("Missing required SaaS headers: sec-res-name or oauth-sub")
+                response = JSONResponse(
+                    {"error": "Unauthorized: Missing SaaS headers"}, status_code=401
+                )
+                await response(scope, receive, send)
+                return
+
+            try:
+                # Fetch secret
+                secret_val = get_secret_val(sec_res_name)
+
+                # Parse and validate
+                credentials = parse_and_validate_secret(secret_val, oauth_sub_header)
+
+                # Set context variable
+                token = falcon_credentials_var.set(credentials)
+                saas_logger.debug("SaaS context set for: %s", sec_res_name)
+
+                try:
+                    await app(scope, receive, send)
+                finally:
+                    # Reset context after request
+                    falcon_credentials_var.reset(token)
+                return
+
+            except Exception as e:
+                saas_logger.error("SaaS authentication failed: %s", e)
+                response = JSONResponse(
+                    {"error": f"Unauthorized: SaaS authentication failed: {e}"}, status_code=401
+                )
+                await response(scope, receive, send)
+                return
+
         await app(scope, receive, send)
 
     return middleware

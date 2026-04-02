@@ -20,6 +20,7 @@ from falcon_mcp.common.auth import (
     ASGIApp,
     auth_middleware,
     normalize_content_type_middleware,
+    saas_middleware,
     strip_trailing_slash_middleware,
 )
 from falcon_mcp.common.logging import configure_logging, get_logger
@@ -67,6 +68,13 @@ class FalconMCPServer:
         self.base_url = base_url
         self.debug = debug
         self.user_agent_comment = user_agent_comment
+        # Enforce stateless HTTP if SaaS mode is enabled
+        saas_env = os.environ.get("FALCON_MCP_SAAS", "")
+        saas_mode = (saas_env or "").lower() == "y"
+        if saas_mode:
+            stateless_http = True
+            logger.info("Enforcing stateless HTTP mode for SaaS")
+
         self.stateless_http = stateless_http
         self.api_key = api_key
         self.host = host
@@ -88,10 +96,13 @@ class FalconMCPServer:
             member_cid=member_cid,
         )
 
-        # Authenticate with the Falcon API
-        if not self.falcon_client.authenticate():
-            logger.error("Failed to authenticate with the Falcon API")
-            raise RuntimeError("Failed to authenticate with the Falcon API")
+        # Authenticate with the Falcon API (skip if SaaS mode)
+        if getattr(self.falcon_client, "saas_mode", False) is not True:
+            if not self.falcon_client.authenticate():
+                logger.error("Failed to authenticate with the Falcon API")
+                raise RuntimeError("Failed to authenticate with the Falcon API")
+        else:
+            logger.info("Skipping startup authentication for SaaS mode")
 
         # Initialize the MCP server
         self.server = FastMCP(
@@ -207,6 +218,12 @@ class FalconMCPServer:
         """
         app = strip_trailing_slash_middleware(app)
         app = normalize_content_type_middleware(app)
+        
+        # Apply SaaS middleware if enabled
+        if getattr(self.falcon_client, "saas_mode", False) is True:
+            app = saas_middleware(app)
+            logger.info("SaaS middleware enabled")
+
         if self.api_key:
             app = auth_middleware(app, self.api_key)
             logger.info("API key authentication enabled")

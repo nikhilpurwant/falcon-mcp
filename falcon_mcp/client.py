@@ -40,6 +40,10 @@ class FalconClient:
             client_secret: Falcon API Client Secret (defaults to FALCON_CLIENT_SECRET env var)
             member_cid: Child CID for Flight Control (MSSP) support (defaults to FALCON_MEMBER_CID env var)
         """
+        # Check if SaaS mode is enabled
+        saas_env = os.environ.get("FALCON_MCP_SAAS", "")
+        self.saas_mode = (saas_env or "").lower() == "y"
+
         # Get credentials from parameters or environment variables (parameters take precedence)
         self.client_id = client_id or os.environ.get("FALCON_CLIENT_ID")
         self.client_secret = client_secret or os.environ.get("FALCON_CLIENT_SECRET")
@@ -52,31 +56,59 @@ class FalconClient:
         )
         self.member_cid = member_cid or os.environ.get("FALCON_MEMBER_CID")
 
-        if not self.client_id or not self.client_secret:
-            raise ValueError(
-                "Falcon API credentials not provided. Either pass client_id and client_secret "
-                "parameters or set FALCON_CLIENT_ID and FALCON_CLIENT_SECRET environment variables."
-            )
+        if not self.saas_mode:
+            if not self.client_id or not self.client_secret:
+                raise ValueError(
+                    "Falcon API credentials not provided. Either pass client_id and client_secret "
+                    "parameters or set FALCON_CLIENT_ID and FALCON_CLIENT_SECRET environment variables."
+                )
 
-        # Build APIHarnessV2 initialization parameters
-        api_params = {
-            "client_id": self.client_id,
-            "client_secret": self.client_secret,
-            "base_url": self.base_url,
-            "debug": debug,
-            "user_agent": self.get_user_agent(),
-        }
+            # Build APIHarnessV2 initialization parameters
+            api_params = {
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "base_url": self.base_url,
+                "debug": debug,
+                "user_agent": self.get_user_agent(),
+            }
 
-        # Only include member_cid if it's provided
-        if self.member_cid:
-            api_params["member_cid"] = self.member_cid
+            # Only include member_cid if it's provided
+            if self.member_cid:
+                api_params["member_cid"] = self.member_cid
 
-        # Initialize the Falcon API client using APIHarnessV2
-        self.client = APIHarnessV2(**api_params)
+            # Initialize the static Falcon API client using APIHarnessV2
+            self._static_client = APIHarnessV2(**api_params)
 
-        logger.debug("Initialized Falcon client with base URL: %s", self.base_url)
-        if self.member_cid:
-            logger.debug("Flight Control member_cid: %s", self.member_cid)
+            logger.debug("Initialized Static Falcon client with base URL: %s", self.base_url)
+            if self.member_cid:
+                logger.debug("Flight Control member_cid: %s", self.member_cid)
+        else:
+            logger.info("Falcon client initialized in SaaS mode (dynamic resolution)")
+
+    @property
+    def client(self) -> Any:
+        """Get the underlying Falcon API client (static or dynamic)."""
+        if self.saas_mode:
+            from falcon_mcp.common.saas import falcon_credentials_var
+
+            creds = falcon_credentials_var.get()
+            if not creds:
+                logger.error("SaaS credentials not found in context")
+                raise ValueError("SaaS credentials not found in context")
+
+            api_params = {
+                "client_id": creds["client_id"],
+                "client_secret": creds["client_secret"],
+                "base_url": creds["base_url"],
+                "debug": self.debug,
+                "user_agent": self.get_user_agent(),
+            }
+            if self.member_cid:
+                api_params["member_cid"] = self.member_cid
+
+            return APIHarnessV2(**api_params)
+        else:
+            return self._static_client
 
     def authenticate(self) -> bool:
         """Authenticate with the Falcon API.

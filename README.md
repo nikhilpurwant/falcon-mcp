@@ -515,6 +515,38 @@ Each instance maintains its own authentication context and can be accessed indep
 - **EU-1**: `https://api.eu-1.crowdstrike.com`
 - **US-GOV**: `https://api.laggar.gcw.crowdstrike.com`
 
+### SaaS Multi-Tenant Mode
+
+The Falcon MCP server can run in a SaaS multi-tenant mode where it doesn't require static credentials at startup. Instead, it dynamically resolves credentials per request from Google Cloud Secret Manager based on request headers.
+
+This mode is designed for HTTP-based transports (`sse` and `streamable-http`) and enforces stateless mode.
+
+#### Configuration
+
+**Enable SaaS Mode**:
+
+```bash
+export FALCON_MCP_SAAS="Y"
+```
+
+When enabled, the server will skip startup authentication checks and apply a middleware to resolve credentials dynamically.
+
+#### Request Headers
+
+Clients must send the following headers with every request:
+
+- `SEC_RES_NAME`: The Google Cloud Secret Manager secret resource name (e.g., `projects/123456789/secrets/my-falcon-secret`).
+- `OAUTH_SUB`: The OAuth subject (Client ID) to validate against the secret content.
+
+#### Secret Content Format
+
+The secret in Secret Manager should contain the credentials in the following format:
+
+`OAUTH_SUB=FALCON_CLIENT_ID=FALCON_CLIENT_SECRET=FALCON_BASE_URL`
+
+Example:
+`110169484474386276334=42614583a5fd40d587e363710b12345=WR1kfBx7OKGm0ZIMVnU6LA4Ypg8euvd95Q1234567=https://api.us-2.crowdstrike.com`
+
 ### Installation
 
 > [!NOTE]
@@ -688,6 +720,9 @@ python examples/sse_usage.py
 
 # Run with streamable-http transport
 python examples/streamable_http_usage.py
+
+# Run SaaS test client (requires SaaS server running)
+python examples/saas_client_usage.py
 ```
 
 ## Container Usage
