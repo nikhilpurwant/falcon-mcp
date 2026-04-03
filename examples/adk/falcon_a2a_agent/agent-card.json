@@ -3,6 +3,29 @@
   "version": "1.0.0",
   "description": "CrowdStrike Falcon Cybersecurity Analyst",
   "capabilities": {},
+  "securitySchemes": {
+    "OAuth2Auth": {
+      "type": "oauth2",
+      "flows": {
+        "authorizationCode": {
+          "authorizationUrl": "https://accounts.google.com/o/oauth2/auth",
+          "tokenUrl": "https://oauth2.googleapis.com/token",
+          "scopes": {
+            "openid": "OpenID Connect",
+            "offline_access": "Offline access"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "OAuth2Auth": [
+        "openid",
+        "offline_access"
+      ]
+    }
+  ],
   "skills": [
     {
       "id": "falcon_a2a_agent-investigate_threat",

@@ -11,7 +11,7 @@ import sys
 # Configuration
 SERVER_URL = "http://localhost:8000/mcp"
 # Example Secret Resource Name (replace with your actual secret)
-SEC_RES_NAME = "projects/PROJECT_NUMBER/secrets/falcon_mcp_110169484474386276334"
+SEC_RES_NAME = "projects/PROJECT_ID/secrets/falcon_mcp_110169484474386276334"
 # The Client ID (OAuth Sub) that matches what is inside the secret
 OAUTH_SUB = "110169484474386276334"
 
